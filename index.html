@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body id="box">
+    <ol id="users"></ul>
+</body>
+
+<script>
+    function getRandomInt(max) {
+        return Math.floor(Math.random() * max);
+    }
+
+    function createClientWrapper(client){
+        const clientWrapper = document.createElement("li")
+        clientWrapper.classList.add("clientWrapper", `client_${client.id}`)
+
+        const id = document.createElement("div")
+        id.innerText = client.id
+        id.className = "clientID"
+
+        const status = document.createElement("div")
+        status.innerText = client.status
+        status.classList.add(client.status, 'status') 
+
+        clientWrapper.append(id, status)
+
+        return clientWrapper;
+    }
+
+    const ws = new WebSocket('ws://localhost:7071/ws');
+    ws.onopen = () => {
+        ws.send(JSON.stringify({type: "getLastClient"}))
+    }
+
+    ws.onmessage = (message) => {
+        const data = JSON.parse(message.data)
+        
+        switch(data.type){
+            case "successfulConnection":
+                data.usersStatuses.forEach((client)=>{
+                    const clientWrapper = createClientWrapper(client)
+                    document.getElementById("users").appendChild(clientWrapper)
+                })
+            break;
+            case "newUser":
+                document.getElementById("users").appendChild(createClientWrapper(data))
+            break;
+            case "clientChangeStatus":
+                const clientWrapper = document.querySelector(`.client_${data.id}`)
+                
+                const status = clientWrapper.querySelector(".status")
+                status.innerText = data.status
+                status.classList.remove("offline", "online")
+                status.classList.add(data.status)
+            break;
+            case "lastClient":
+                ws.send(JSON.stringify({id: data.id + 1, type: "hello"}))
+            break;
+        }
+    }
+</script>
+
+<style>
+   
+
+    .status {
+        font-weight: bold;
+    }
+
+    .offline {
+        color: red;
+    }
+
+    .online {
+        color: green;
+    }
+
+    .clientWrapper{
+        padding: 5px;
+        border: 1px solid #000;
+        display: flex;
+        max-width: 200px;
+        justify-content: space-between;
+    }
+</style>
+</html>
