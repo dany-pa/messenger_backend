@@ -1,6 +1,40 @@
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 7071 });
 
+const http = require("http");
+const host = '127.0.0.1';
+const port = 8000;
+const requestListener = function (req, res) {
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    switch (url.pathname) {
+        case '/history':
+            const usersParam = url.searchParams.get("users") ?? ''
+            const users = usersParam.split(',')
+            console.log(users)
+            
+            res.writeHead(200);
+
+            const dialog = getDialog(users)
+            res.end(JSON.stringify(dialog?.messages ?? []));
+        break;
+        default:
+            res.writeHead(404);
+            res.end(JSON.stringify({error:"Resource not found"}));
+
+    }
+};
+
+const server = http.createServer(requestListener);
+server.listen(port, host, () => {
+    console.log(`Server is running on http://${host}:${port}`);
+});
+
+function getDialog(users){
+    return dialogs.find(dialog => users.every((user)=>dialog.users.includes(Number(user))))
+}
+
 function checkClientsStatuses(){
     [...clients.values()].forEach((client)=>{
         const lastEvent = client.lastEvent
@@ -24,6 +58,10 @@ function sendToAllClients(message, expectID){
 }
 
 const clients = new Map();
+const dialogs = [{
+    users: [1,2],
+    messages: [{from: 1, to: 2, text: "message"}]
+}];
 let isIntervalStarted = false
 
 wss.on('connection', (ws) => {
@@ -58,6 +96,25 @@ wss.on('connection', (ws) => {
                     type: "lastClient",
                     id: [...clients.values()][clients.size-1]?.id ?? 0
                 }));
+            break;
+            case "sendMessage":
+                const dialog = getDialog(data.from, data.to)
+                if (dialog){
+                    dialog.messages.push({
+                        from: data.from,
+                        to: data.to,
+                        text: data.text,
+                    })
+                } else {
+                    dialogs.push({
+                        users: [data.from, data.to],
+                        messages: [{
+                            from: data.from,
+                            to: data.to,
+                            text: data.text,
+                        }]
+                    })
+                }
             break;
         }
         // if (!isIntervalStarted){

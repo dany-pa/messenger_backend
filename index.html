@@ -6,70 +6,211 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
 </head>
-<body id="box">
-    <ol id="users"></ul>
-</body>
 
 <script>
-    function getRandomInt(max) {
-        return Math.floor(Math.random() * max);
-    }
-
-    function createClientWrapper(client){
-        const clientWrapper = document.createElement("li")
-        clientWrapper.classList.add("clientWrapper", `client_${client.id}`)
-
-        const id = document.createElement("div")
-        id.innerText = client.id
-        id.className = "clientID"
-
-        const status = document.createElement("div")
-        status.innerText = client.status
-        status.classList.add(client.status, 'status') 
-
-        clientWrapper.append(id, status)
-
-        return clientWrapper;
-    }
-
-    const ws = new WebSocket('ws://localhost:7071/ws');
-    ws.onopen = () => {
-        ws.send(JSON.stringify({type: "getLastClient"}))
-    }
-
-    ws.onmessage = (message) => {
-        const data = JSON.parse(message.data)
-        
-        switch(data.type){
-            case "successfulConnection":
-                data.usersStatuses.forEach((client)=>{
-                    const clientWrapper = createClientWrapper(client)
-                    document.getElementById("users").appendChild(clientWrapper)
-                })
-            break;
-            case "newUser":
-                document.getElementById("users").appendChild(createClientWrapper(data))
-            break;
-            case "clientChangeStatus":
-                const clientWrapper = document.querySelector(`.client_${data.id}`)
-                
-                const status = clientWrapper.querySelector(".status")
-                status.innerText = data.status
-                status.classList.remove("offline", "online")
-                status.classList.add(data.status)
-            break;
-            case "lastClient":
-                ws.send(JSON.stringify({id: data.id + 1, type: "hello"}))
-            break;
+    window.addEventListener("DOMContentLoaded", () => {
+        var userData = {
+            id: undefined,
+            activeChat: undefined
         }
-    }
+    
+        function sendMessage(event){
+            event.preventDefault()
+
+            const textEl = document.querySelector('.messageBox__input')
+
+            const message = {
+                from: userData.id,
+                to: userData.activeChat,
+                text: textEl.value
+            }
+
+            ws.send(JSON.stringify({...message,type: "sendMessage" }))
+
+            addMessage(message)
+
+            textEl.value = ''
+        }
+
+        function login(event){
+            event.preventDefault()
+
+            const currentClientContainer = document.querySelector(`.client_${userData.id}`)
+            currentClientContainer.classList.add('otherUser')
+
+            const isYouContainer = currentClientContainer.querySelector('.isYou')
+            isYouContainer.innerText = ''
+
+            const loginInput = document.querySelector('.login__input')
+            const userID = loginInput.value
+            userData.id = Number(userID)
+            userData.activeChat = undefined
+            
+            loginInput.value = ''
+            
+            const messagesContainer = document.querySelector("#messages")
+            messagesContainer.innerHTML = "Выберите чат"
+            
+            const messageBoxInput = document.querySelector(".messageBox__input")
+            messageBoxInput.disabled = true
+            const messageBoxSubmit = document.querySelector(".messageBox__submit")
+            messageBoxSubmit.disabled = true
+            
+            
+            const userNameElement = document.querySelector("#userName")
+            userNameElement.innerText = userID;
+            
+            const clientContainer = document.querySelector(`.client_${userID}`)
+            clientContainer.classList.remove('otherUser')
+
+            const newIsYouContainer = clientContainer.querySelector('.isYou')
+            newIsYouContainer.innerText = 'it\'s you'
+
+        }
+
+        document.querySelector("#login").addEventListener('submit', login)
+
+        function addMessage(message){
+            const directionClass = userData.id === message.from ? 'outbound' :'inbound'
+            const directionContainer = document.createElement("span")
+            directionContainer.innerText = directionClass
+            directionContainer.classList.add("direction")
+            
+            const messageContainer = document.createElement("div")
+            messageContainer.classList.add("message", directionClass)
+
+            const textContainer = document.createElement("span")
+            textContainer.innerText = message.text
+            messageContainer.append(directionContainer, textContainer)
+
+            const messagesContainer = document.querySelector("#messages")
+            messagesContainer.append(messageContainer)
+        }
+    
+        document.getElementById("messageBox").addEventListener("submit", sendMessage)
+    
+        async function getHistory(users){
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/history?users=${users}`)
+                const data = await response.json()
+                return data
+            } catch(err) {
+                console.error(err)
+            }
+        }
+    
+        async function openMessages(userID){
+            if (userID == userData.id) return
+
+            userData.activeChat = userID
+            try {
+                const messages = await getHistory([userID, userData.id])
+                const messagesContainer = document.querySelector("#messages")
+                messagesContainer.innerHTML = ""
+
+                const header = document.createElement("div")
+                header.classList.add("chat-header")
+                header.innerText = `Чат с пользователем: ${userID}`
+                messagesContainer.append(header)
+                
+                const messageBoxInput = document.querySelector(".messageBox__input")
+                messageBoxInput.disabled = false
+                const messageBoxSubmit = document.querySelector(".messageBox__submit")
+                messageBoxSubmit.disabled = false
+    
+                if (messages.length === 0){
+                    const textContainer = document.createElement("div")
+                    textContainer.innerText = 'ИСТОРИЯ ПУСТА'
+                    messagesContainer.append(textContainer)
+                } else {
+                    messages.forEach(message => {
+                        addMessage(message)
+                    })
+                }
+
+    
+            } catch(err) {
+                console.error(err)
+            }
+        }
+    
+        function getRandomInt(max) {
+            return Math.floor(Math.random() * max);
+        }
+    
+        function createClientWrapper(client, isMarked = false){
+            const clientWrapper = document.createElement("li")
+            clientWrapper.classList.add("clientWrapper", `client_${client.id}`)
+            const yourElement = document.createElement('span')
+            yourElement.classList.add('isYou')
+            
+            if (isMarked){
+                yourElement.innerText = 'it\'s you'
+            } else {
+                clientWrapper.classList.add('otherUser')
+                clientWrapper.addEventListener('click', () => openMessages(client.id))
+            }
+    
+            const id = document.createElement("div")
+            id.innerText = client.id
+            id.className = "clientID"
+    
+            const status = document.createElement("div")
+            status.innerText = client.status
+            status.classList.add(client.status, 'status') 
+    
+            clientWrapper.append(id, yourElement, status)
+    
+            return clientWrapper;
+        }
+    
+        const ws = new WebSocket('ws://localhost:7071/ws');
+        ws.onopen = () => {
+            ws.send(JSON.stringify({type: "getLastClient"}))
+        }
+    
+        ws.onmessage = (message) => {
+            const data = JSON.parse(message.data)
+            
+            switch(data.type){
+                case "successfulConnection":
+                    data.usersStatuses.forEach((client)=>{
+                        const isMarked = client.id === userData.id
+                        const clientWrapper = createClientWrapper(client, isMarked)
+                        document.getElementById("users").appendChild(clientWrapper)
+                    })
+                break; 
+                case "newUser":
+                    document.getElementById("users").appendChild(createClientWrapper(data))
+                break;
+                case "clientChangeStatus":
+                    const clientWrapper = document.querySelector(`.client_${data.id}`)
+                    
+                    const status = clientWrapper.querySelector(".status")
+                    status.innerText = data.status
+                    status.classList.remove("offline", "online")
+                    status.classList.add(data.status)
+                break;
+                case "lastClient":
+                    const userID = data.id + 1;
+                    ws.send(JSON.stringify({id: userID, type: "hello"}))
+    
+                    userData.id = userID
+                    const userNameElement = document.querySelector("#userName")
+                    userNameElement.innerText = userID;
+                break;
+            }
+        }
+    })
 </script>
-
+ 
 <style>
-   
-
+    * {
+        box-sizing: border-box;
+    }
     .status {
         font-weight: bold;
+        order: 3;
     }
 
     .offline {
@@ -86,6 +227,107 @@
         display: flex;
         max-width: 200px;
         justify-content: space-between;
+        align-items: flex-end;
+    }
+
+    .clientID{
+        order: 1;
+    }
+
+    #users{
+        width: 150px;
+        margin: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 0;
+    }
+
+    #box{
+        display: flex;
+        height: 500px;
+        overflow: hidden;
+        width: 550px;
+        border: 1px solid green;
+    }
+
+    #messages{
+        width: 400px;
+        border: 1px solid #000;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .message{
+        border-bottom: 1px solid black;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .outbound{
+        color: blue
+    }
+
+    .inbound{
+        color: red;
+        text-align: right;
+    }
+
+    #userName{
+        font-weight: bold;
+        text-decoration: underline;
+        padding: 20px 0;
+        display: inline-block;
+    }
+
+    .isMarked {
+        background-color: rgba(0,0,0,0.25);
+    }
+
+    .isYou{
+        font-size: 10px;
+        order: 2;
+    }
+    .otherUser{
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .otherUser:hover{
+        background-color: rgba(0,0,0,0.2);
+    }
+
+    .direction{
+        color: black;
+        font-size: 10px;
+    }
+    .chat{
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
     }
 </style>
+
+<body>
+    <header>
+        Привет пользователь <span id="userName">1</span>
+        <br>
+        Зайти как 
+        <form id="login">
+            <input type="text" class="login__input">
+            <input type="submit" value="Зайти">
+        </form>
+    </header>
+    <div id="box">
+        <ol id="users"></ol>
+        <div class="chat">
+            <div id="messages">Выберите чат</div>
+            <form type="get" id="messageBox">
+                <input type="text" placeholder="сообщение..." class="messageBox__input" name="message" disabled>
+                <input type="submit" value="Отправить" class="messageBox__submit" name="btn" disabled>
+            </form>
+        </div>
+    </div>
+</body>
+
 </html>
