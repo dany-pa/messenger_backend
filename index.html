@@ -143,12 +143,12 @@
             clientWrapper.classList.add("clientWrapper", `client_${client.id}`)
             const yourElement = document.createElement('span')
             yourElement.classList.add('isYou')
+            clientWrapper.addEventListener('click', () => openMessages(client.id))
             
             if (isMarked){
                 yourElement.innerText = 'it\'s you'
             } else {
                 clientWrapper.classList.add('otherUser')
-                clientWrapper.addEventListener('click', () => openMessages(client.id))
             }
     
             const id = document.createElement("div")
@@ -198,6 +198,11 @@
                     userData.id = userID
                     const userNameElement = document.querySelector("#userName")
                     userNameElement.innerText = userID;
+                break;
+                case "newMessage":
+                    if (data.from == userData.activeChat){
+                        addMessage(data)
+                    }
                 break;
             }
         }

@@ -12,7 +12,6 @@ const requestListener = function (req, res) {
         case '/history':
             const usersParam = url.searchParams.get("users") ?? ''
             const users = usersParam.split(',')
-            console.log(users)
             
             res.writeHead(200);
 
@@ -98,23 +97,30 @@ wss.on('connection', (ws) => {
                 }));
             break;
             case "sendMessage":
-                const dialog = getDialog(data.from, data.to)
+                const dialog = getDialog([message.from, message.to])
                 if (dialog){
                     dialog.messages.push({
-                        from: data.from,
-                        to: data.to,
-                        text: data.text,
+                        from: message.from,
+                        to: message.to,
+                        text: message.text,
                     })
                 } else {
                     dialogs.push({
-                        users: [data.from, data.to],
+                        users: [message.from, message.to],
                         messages: [{
-                            from: data.from,
-                            to: data.to,
-                            text: data.text,
+                            from: message.from,
+                            to: message.to,
+                            text: message.text,
                         }]
                     })
                 }
+
+                clients.get(message.to).ws.send(JSON.stringify({
+                    type: "newMessage",
+                    from: message.from,
+                    to: message.to,
+                    text: message.text,
+                }))
             break;
         }
         // if (!isIntervalStarted){
