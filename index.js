@@ -1,3 +1,5 @@
+const fs = require('fs').promises;
+
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 7071 });
 
@@ -19,9 +21,15 @@ const requestListener = function (req, res) {
             res.end(JSON.stringify(dialog?.messages ?? []));
         break;
         default:
-            res.writeHead(404);
-            res.end(JSON.stringify({error:"Resource not found"}));
-
+            fs.readFile(__dirname + "/index.html").then(contents => {
+                res.setHeader("Content-Type", "text/html");
+                res.writeHead(200);
+                res.end(contents);
+            }).catch(err => {
+                res.writeHead(500);
+                res.end(err);
+                return;
+            });
     }
 };
 
